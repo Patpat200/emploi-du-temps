@@ -1,0 +1,58 @@
+name: EAS Build — AAB + APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version 1.1.0"
+        required: true
+        default: "1.1.0"
+
+jobs:
+  build:
+    name: Build Android
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      # ── Build AAB (Play Store) ──────────────────────────────────────
+      - name: Build AAB (production)
+        run: npx eas-cli build --platform android --profile production --non-interactive --output ./build.aab
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # ── Build APK (sideload / test) ─────────────────────────────────
+      - name: Build APK (preview)
+        run: npx eas-cli build --platform android --profile preview --non-interactive --output ./build.apk
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # ── Créer la release GitHub ─────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          name: "v${{ github.event.inputs.version }}"
+          body: |
+            ## 📦 Emploi du Temps — v${{ github.event.inputs.version }}
+
+            ### Fichiers
+            - `build.aab` → upload sur Google Play Console
+            - `build.apk` → installation directe (test / sideload)
+
+            > Build généré automatiquement via EAS Build (Expo)
+          files: |
+            build.aab
+            build.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
