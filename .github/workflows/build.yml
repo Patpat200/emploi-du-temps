@@ -1,4 +1,4 @@
-name: EAS Build - AAB + APK
+name: EAS Build — AAB + APK
 
 on:
   workflow_dispatch:
@@ -12,8 +12,6 @@ jobs:
   build_aab:
     name: Build AAB (Play Store)
     runs-on: ubuntu-latest
-    outputs:
-      download_url: ${{ steps.wait.outputs.download_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,24 +30,28 @@ jobs:
       - name: Lance le build AAB
         id: launch
         run: |
-          OUTPUT=$(eas build --platform android --profile production --non-interactive --json --no-wait 2>/dev/null)
-          echo "raw: $OUTPUT"
-          BUILD_ID=$(echo "$OUTPUT" | jq -r '.[0].id // .id')
+          # Sauvegarder stdout ET stderr séparément
+          eas build --platform android --profile production --non-interactive --json --no-wait > eas_output.txt 2>eas_stderr.txt || true
+          echo "=== STDOUT ===" && cat eas_output.txt
+          echo "=== STDERR ===" && cat eas_stderr.txt
+          # Extraire le JSON (dernière ligne qui ressemble à du JSON)
+          JSON_LINE=$(grep -o '\[.*\]\|\{.*\}' eas_output.txt | tail -1)
+          echo "JSON extrait: $JSON_LINE"
+          BUILD_ID=$(echo "$JSON_LINE" | jq -r '.[0].id // .id')
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Attendre et télécharger le AAB
-        id: wait
         run: |
           BUILD_ID="${{ steps.launch.outputs.build_id }}"
           echo "Build ID: $BUILD_ID"
           for i in $(seq 1 40); do
-            STATUS=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.status')
+            eas build:view "$BUILD_ID" --json > view_output.txt 2>/dev/null || true
+            STATUS=$(grep -o '"status":"[^"]*"' view_output.txt | head -1 | cut -d'"' -f4)
             echo "Statut ($i/40): $STATUS"
             if [ "$STATUS" = "FINISHED" ]; then
-              URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl')
-              echo "download_url=$URL" >> $GITHUB_OUTPUT
+              URL=$(grep -o '"buildUrl":"[^"]*"' view_output.txt | head -1 | cut -d'"' -f4)
               curl -L "$URL" -o build.aab
               echo "✅ AAB téléchargé"
               break
@@ -62,7 +64,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Upload AAB comme artefact
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: build-aab
@@ -89,9 +91,12 @@ jobs:
       - name: Lance le build APK
         id: launch
         run: |
-          OUTPUT=$(eas build --platform android --profile preview --non-interactive --json --no-wait 2>/dev/null)
-          echo "raw: $OUTPUT"
-          BUILD_ID=$(echo "$OUTPUT" | jq -r '.[0].id // .id')
+          eas build --platform android --profile preview --non-interactive --json --no-wait > eas_output.txt 2>eas_stderr.txt || true
+          echo "=== STDOUT ===" && cat eas_output.txt
+          echo "=== STDERR ===" && cat eas_stderr.txt
+          JSON_LINE=$(grep -o '\[.*\]\|\{.*\}' eas_output.txt | tail -1)
+          echo "JSON extrait: $JSON_LINE"
+          BUILD_ID=$(echo "$JSON_LINE" | jq -r '.[0].id // .id')
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -101,10 +106,11 @@ jobs:
           BUILD_ID="${{ steps.launch.outputs.build_id }}"
           echo "Build ID: $BUILD_ID"
           for i in $(seq 1 40); do
-            STATUS=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.status')
+            eas build:view "$BUILD_ID" --json > view_output.txt 2>/dev/null || true
+            STATUS=$(grep -o '"status":"[^"]*"' view_output.txt | head -1 | cut -d'"' -f4)
             echo "Statut ($i/40): $STATUS"
             if [ "$STATUS" = "FINISHED" ]; then
-              URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl')
+              URL=$(grep -o '"buildUrl":"[^"]*"' view_output.txt | head -1 | cut -d'"' -f4)
               curl -L "$URL" -o build.apk
               echo "✅ APK téléchargé"
               break
@@ -117,7 +123,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Upload APK comme artefact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: build-apk
