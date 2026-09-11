@@ -9,10 +9,11 @@ on:
         default: "1.0.0"
 
 jobs:
-  build:
-    name: Build Android
+  build_aab:
+    name: Build AAB (Play Store)
     runs-on: ubuntu-latest
-
+    outputs:
+      download_url: ${{ steps.wait.outputs.download_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,60 +29,115 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      # ── Build AAB (Play Store) ──────────────────────────────────────
-      - name: Build AAB (production)
-        id: build_aab
+      - name: Lance le build AAB
+        id: launch
         run: |
-          BUILD_URL=$(eas build --platform android --profile production --non-interactive --json --no-wait | jq -r '.[0].buildUrl // .buildUrl // empty')
-          echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
+          OUTPUT=$(eas build --platform android --profile production --non-interactive --json --no-wait 2>/dev/null)
+          echo "raw: $OUTPUT"
+          BUILD_ID=$(echo "$OUTPUT" | jq -r '.[0].id // .id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # ── Build APK (sideload / test) ─────────────────────────────────
-      - name: Build APK (preview)
-        id: build_apk
+      - name: Attendre et télécharger le AAB
+        id: wait
         run: |
-          BUILD_URL=$(eas build --platform android --profile preview --non-interactive --json --no-wait | jq -r '.[0].buildUrl // .buildUrl // empty')
-          echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
-      # ── Attendre la fin des builds et récupérer les artefacts ───────
-      - name: Wait and download AAB
-        run: |
-          echo "En attente du build AAB..."
-          eas build:list --platform android --status finished --limit 1 --json > /dev/null 2>&1 || true
-          # Attendre que le build soit terminé puis télécharger
-          for i in $(seq 1 30); do
-            DOWNLOAD_URL=$(eas build:list --platform android --status finished --limit 1 --json | jq -r '.[0].artifacts.buildUrl // empty')
-            if [ -n "$DOWNLOAD_URL" ]; then
-              curl -L "$DOWNLOAD_URL" -o build.aab
-              echo "AAB téléchargé ✅"
+          BUILD_ID="${{ steps.launch.outputs.build_id }}"
+          echo "Build ID: $BUILD_ID"
+          for i in $(seq 1 40); do
+            STATUS=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.status')
+            echo "Statut ($i/40): $STATUS"
+            if [ "$STATUS" = "FINISHED" ]; then
+              URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl')
+              echo "download_url=$URL" >> $GITHUB_OUTPUT
+              curl -L "$URL" -o build.aab
+              echo "✅ AAB téléchargé"
               break
+            elif [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Build échoué: $STATUS"
+              exit 1
             fi
-            echo "Attente... ($i/30)"
             sleep 60
           done
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Wait and download APK
+      - name: Upload AAB comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-aab
+          path: build.aab
+
+  build_apk:
+    name: Build APK (sideload)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Lance le build APK
+        id: launch
         run: |
-          echo "En attente du build APK..."
-          for i in $(seq 1 30); do
-            DOWNLOAD_URL=$(eas build:list --platform android --profile preview --status finished --limit 1 --json | jq -r '.[0].artifacts.buildUrl // empty')
-            if [ -n "$DOWNLOAD_URL" ]; then
-              curl -L "$DOWNLOAD_URL" -o build.apk
-              echo "APK téléchargé ✅"
+          OUTPUT=$(eas build --platform android --profile preview --non-interactive --json --no-wait 2>/dev/null)
+          echo "raw: $OUTPUT"
+          BUILD_ID=$(echo "$OUTPUT" | jq -r '.[0].id // .id')
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Attendre et télécharger le APK
+        run: |
+          BUILD_ID="${{ steps.launch.outputs.build_id }}"
+          echo "Build ID: $BUILD_ID"
+          for i in $(seq 1 40); do
+            STATUS=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.status')
+            echo "Statut ($i/40): $STATUS"
+            if [ "$STATUS" = "FINISHED" ]; then
+              URL=$(eas build:view "$BUILD_ID" --json 2>/dev/null | jq -r '.artifacts.buildUrl')
+              curl -L "$URL" -o build.apk
+              echo "✅ APK téléchargé"
               break
+            elif [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Build échoué: $STATUS"
+              exit 1
             fi
-            echo "Attente... ($i/30)"
             sleep 60
           done
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # ── Créer la release GitHub ─────────────────────────────────────
+      - name: Upload APK comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-apk
+          path: build.apk
+
+  release:
+    name: Créer la Release GitHub
+    runs-on: ubuntu-latest
+    needs: [build_aab, build_apk]
+    steps:
+      - name: Download AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: build-aab
+
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: build-apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
