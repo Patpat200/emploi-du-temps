@@ -120,14 +120,14 @@ export default function SettingsScreen() {
             URL du flux ICS
           </Text>
           <Text className="text-sm text-muted mb-3">
-            Collez l'URL de votre emploi du temps depuis le site de l'UHA. Une URL par defaut est deja configuree.
+            Collez l'URL de votre emploi du temps depuis le site de votre université. Une URL par defaut est deja configuree.
           </Text>
           <View className="bg-green-500/10 rounded-lg p-3 mb-3">
             <Text className="text-green-600 text-xs font-medium">
               OK L'URL ICS fonctionne correctement
             </Text>
             <Text className="text-green-600 text-xs mt-1">
-              Note: Le service RSS de l'UHA est en erreur. Utilisez l'URL ICS.
+              Note: Le service RSS est en erreur. Utilisez l'URL ICS.
             </Text>
           </View>
           <TextInput
@@ -285,7 +285,7 @@ export default function SettingsScreen() {
               Version 1.0.2
             </Text>
             <Text className="text-sm text-muted">
-              Application d'emploi du temps pour l'UHA
+              Application d'emploi du temps pour les étudiants
             </Text>
           </View>
         </View>
