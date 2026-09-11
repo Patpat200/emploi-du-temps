@@ -1,11 +1,11 @@
-# 📅 Emploi du Temps UHA
+# 📅 Emploi du Temps Etudiant
 
 ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-lightgrey.svg)
 ![Built with](https://img.shields.io/badge/built%20with-Expo-000020.svg)
 
-Une application mobile moderne et fluide pour consulter l'emploi du temps de l'**Université de Haute-Alsace (UHA)**. Conçue pour simplifier la vie des étudiants grâce à la synchronisation automatique et aux notifications de changement de cours.
+Une application mobile moderne et fluide pour consulter l'emploi du temps. Conçue pour simplifier la vie des étudiants grâce à la synchronisation automatique et aux notifications de changement de cours.
 
 ## Sommaire
 
@@ -53,7 +53,7 @@ Ce projet utilise les dernières technologies de l'écosystème React Native :
 
 ## Installer l’application (Android)
 
-1. Aller dans les [Releases](https://github.com/Patpat200/emploi-du-temps-uha/releases) puis télécharger l’APK directement sur votre smartphone Android.
+1. Aller dans les [Releases](https://github.com/Patpat200/emploi-du-temps/releases) puis télécharger l’APK directement sur votre smartphone Android.
 2. Exécuter le fichier que vous avez installé.
 3. Et suivez les étapes qui seront indiqué.
 
@@ -74,7 +74,7 @@ Pour créer un fichier installable (`.apk`) pour Android via EAS Build :
 
 ## Configuration
 
-L'application utilise une URL par défaut pour l'UHA définie dans `lib/sync-service.ts`.
+L'application utilise une URL par défaut définie dans `lib/sync-service.ts`.
 Chaque utilisateur peut écraser cette URL directement dans l'application via l'onglet **Paramètres** pour afficher son propre emploi du temps.
 
 ---
