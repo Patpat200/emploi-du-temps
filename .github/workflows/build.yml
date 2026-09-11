@@ -1,12 +1,12 @@
-name: EAS Build — AAB + APK
+name: EAS Build - AAB + APK
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version 1.1.0"
+        description: "Version (ex: 1.0.2)"
         required: true
-        default: "1.1.0"
+        default: "1.0.0"
 
 jobs:
   build:
@@ -25,15 +25,59 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
       # ── Build AAB (Play Store) ──────────────────────────────────────
       - name: Build AAB (production)
-        run: npx eas-cli build --platform android --profile production --non-interactive --output ./build.aab
+        id: build_aab
+        run: |
+          BUILD_URL=$(eas build --platform android --profile production --non-interactive --json --no-wait | jq -r '.[0].buildUrl // .buildUrl // empty')
+          echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       # ── Build APK (sideload / test) ─────────────────────────────────
       - name: Build APK (preview)
-        run: npx eas-cli build --platform android --profile preview --non-interactive --output ./build.apk
+        id: build_apk
+        run: |
+          BUILD_URL=$(eas build --platform android --profile preview --non-interactive --json --no-wait | jq -r '.[0].buildUrl // .buildUrl // empty')
+          echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # ── Attendre la fin des builds et récupérer les artefacts ───────
+      - name: Wait and download AAB
+        run: |
+          echo "En attente du build AAB..."
+          eas build:list --platform android --status finished --limit 1 --json > /dev/null 2>&1 || true
+          # Attendre que le build soit terminé puis télécharger
+          for i in $(seq 1 30); do
+            DOWNLOAD_URL=$(eas build:list --platform android --status finished --limit 1 --json | jq -r '.[0].artifacts.buildUrl // empty')
+            if [ -n "$DOWNLOAD_URL" ]; then
+              curl -L "$DOWNLOAD_URL" -o build.aab
+              echo "AAB téléchargé ✅"
+              break
+            fi
+            echo "Attente... ($i/30)"
+            sleep 60
+          done
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Wait and download APK
+        run: |
+          echo "En attente du build APK..."
+          for i in $(seq 1 30); do
+            DOWNLOAD_URL=$(eas build:list --platform android --profile preview --status finished --limit 1 --json | jq -r '.[0].artifacts.buildUrl // empty')
+            if [ -n "$DOWNLOAD_URL" ]; then
+              curl -L "$DOWNLOAD_URL" -o build.apk
+              echo "APK téléchargé ✅"
+              break
+            fi
+            echo "Attente... ($i/30)"
+            sleep 60
+          done
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
